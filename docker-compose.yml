@@ -1,0 +1,22 @@
+version: '2.2'
+services:
+  redis:
+    container_name: "redis"
+    image: redis:alpine
+    healthcheck:
+      test: redis-cli ping
+    ports:
+      - "6379:6379"
+    expose:
+      - "6379"
+  # sendyoulater:
+  #   container_name: "sendyoulater"
+  #   image: golang:1.11
+  #   ports:
+  #     - "1323:1323"
+  #   expose:
+  #     - "1323"
+  #   volumes:
+  #     - .:/go/src/github.com/techfort/sendyoulater
+  #   working_dir: /go/src/github.com/techfort/sendyoulater
+  #   command: watcher
