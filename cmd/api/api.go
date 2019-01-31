@@ -59,7 +59,7 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 	return e
 }
 
-// Set sets the timer for an action
+// SetEmailAction sets the timer for an action
 func SetEmailAction(c echo.Context) error {
 	cc := c.(*Context)
 	action := new(sendyoulater.EmailAction)
