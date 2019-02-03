@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/go-redis/redis"
@@ -66,7 +67,7 @@ func SetEmailAction(c echo.Context) error {
 	if err := cc.Bind(action); err != nil {
 		return err
 	}
-
+	fmt.Println(fmt.Sprintf("%+v", action))
 	return nil
 }
 
