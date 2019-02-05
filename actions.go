@@ -1,9 +1,12 @@
 package sendyoulater
 
+import "time"
+
 // Action base type
 type Action struct {
 	UserID    string
-	Timestamp string
+	Timestamp time.Time
+	Delay     time.Duration
 }
 
 // EmailAction is an Action for emails

@@ -17,16 +17,25 @@ type Context struct {
 	Redis *redis.Client
 }
 
+// Store returns the repo factory
+func (c Context) Store() sendyoulater.Store {
+	return sendyoulater.NewStore(c.Redis)
+}
+
 // RoutesGET returns get routes
 func RoutesGET() map[string]echo.HandlerFunc {
-	return map[string]echo.HandlerFunc{}
+	return map[string]echo.HandlerFunc{
+		"/user/:id": UserByID,
+	}
 }
 
 // RoutesPOST returns POST routes
 func RoutesPOST() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
-		"/setemailaction": SetEmailAction,
-		"/remove":         Remove,
+		"/action/email/save":  SaveEmailAction,
+		"/remove":             Remove,
+		"/user/save":          SaveUser,
+		"user/:userId/update": UpdateUser,
 	}
 }
 
@@ -60,8 +69,8 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 	return e
 }
 
-// SetEmailAction sets the timer for an action
-func SetEmailAction(c echo.Context) error {
+// SaveEmailAction sets the timer for an action
+func SaveEmailAction(c echo.Context) error {
 	cc := c.(*Context)
 	action := new(sendyoulater.EmailAction)
 	if err := cc.Bind(action); err != nil {
@@ -71,7 +80,43 @@ func SetEmailAction(c echo.Context) error {
 	return nil
 }
 
+// UpdateUser updates user information
+func UpdateUser(c echo.Context) error {
+	return nil
+}
+
+// SaveUser is the handler for saving user info
+func SaveUser(c echo.Context) error {
+	var m echo.Map
+	cc := c.(*Context)
+	if err := cc.Bind(&m); err != nil {
+		return err
+	}
+	// TODO: continue here...
+	ur := cc.Store().NewUserRepo()
+	user, err := ur.Save(m["userId"].(string), m["firstname"].(string), m["lastname"].(string), m["plan"].(string), m["company"].(string))
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	fmt.Println(fmt.Sprintf("User: %+v", user))
+	return cc.JSONBlob(http.StatusOK, []byte(`{ "message": "user saved correctly"}`))
+}
+
 // Remove removes an action timer
 func Remove(c echo.Context) error {
 	return nil
+}
+
+// UserByID returns a user by id
+func UserByID(c echo.Context) error {
+	cc := c.(*Context)
+	id := cc.Param("id")
+	ur := cc.Store().NewUserRepo()
+	user, err := ur.ByID(id)
+	if err != nil {
+		fmt.Println(err.Error())
+		return cc.JSONBlob(http.StatusInternalServerError, []byte(`{"message": "could not find user"}`))
+	}
+	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"message":"ok", "user":"%+v"}`, user.UserID)))
 }

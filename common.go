@@ -4,11 +4,11 @@ import "fmt"
 
 const (
 	// TimeFormat for datetime formatting
-	TimeFormat = "2006-01-02 15:04:05 +0000 UTC"
+	TimeFormat = "2006-01-02"
 	// Shadow unformatted key
 	Shadow = `shd:`
 	// UserKEY key
-	UserKEY = `u:%v`
+	UserKEY = `user:%v`
 	// PlanKEY key
 	PlanKEY = `plan:%v`
 	// EmailActionKEY unformatted key
@@ -24,6 +24,11 @@ const (
 // KeyPlan returns the formatted plan key
 func KeyPlan(name string) string {
 	return fmt.Sprintf(PlanKEY, name)
+}
+
+// KeyUser returns the formatted user key
+func KeyUser(userID string) string {
+	return fmt.Sprintf(UserKEY, userID)
 }
 
 // KeysEmailAction returns key and shadow key for email actions
