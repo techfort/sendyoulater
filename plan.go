@@ -45,7 +45,8 @@ func (p planRepo) ByName(name string) (Plan, error) {
 		maxemails int64
 		maxsms    int64
 	)
-	ret, err = p.HGetAll(name).Result()
+	ret, err = p.HGetAll(KeyPlan(name)).Result()
+	fmt.Println(fmt.Sprintf("RET: %+v", ret))
 	if maxemails, err = strconv.ParseInt(ret["MaxEmails"], 10, 64); err != nil {
 		return plan, errors.Wrap(err, "failed to parse maxemails value")
 	}

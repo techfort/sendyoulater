@@ -1,18 +1,17 @@
 package sendyoulater
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 )
 
 type emailUseCase struct {
 	store
-	UserRepository UserRepo
-	PlanRepository PlanRepo
+	UserRepository  UserRepo
+	PlanRepository  PlanRepo
+	EmailRepository EmailActionRepo
 }
 
 type emailRepo struct {
@@ -24,7 +23,7 @@ type EmailActionRepo interface {
 	SaveEmailAction(user User, plan Plan, subject, body, to string, ex time.Duration) (EmailAction, error)
 }
 
-func (s store) NewEmailRepo() EmailActionRepo {
+func (s store) NewEmailActionRepo() EmailActionRepo {
 	return emailRepo{s}
 }
 
@@ -33,13 +32,13 @@ type EmailUseCase interface {
 	SaveEmailActions(userID, subject, body string, to []string, ex time.Duration) ([]EmailAction, error)
 }
 
-func (s store) NewEmailUseCase(u UserRepo, p PlanRepo) EmailUseCase {
-	return emailUseCase{s, u, p}
+func (s store) NewEmailUseCase(u UserRepo, p PlanRepo, e EmailActionRepo) EmailUseCase {
+	return emailUseCase{s, u, p, e}
 }
 
 func (s store) SaveEmailAction(user User, plan Plan, subject, body, to string, ex time.Duration) (EmailAction, error) {
-	shadow, actionKey := KeysEmailAction(user.UserID, user.EmailCounter)
-	if _, err := s.Set(shadow, "email", ex).Result(); err != nil {
+	actionKey, shadowKey := KeysEmailAction(user.UserID, user.EmailCounter)
+	if _, err := s.Set(shadowKey, "email", ex).Result(); err != nil {
 		return EmailAction{}, errors.Wrap(err, "error setting shadow key, email action not saved")
 	}
 	_, err := s.HMSet(actionKey, map[string]interface{}{
@@ -66,24 +65,17 @@ func (s emailUseCase) SaveEmailActions(userID, subject, body string, to []string
 	if plan, err = s.PlanRepository.ByName(user.Plan); err != nil {
 		return []EmailAction{}, errors.Wrap(err, fmt.Sprintf("failed to retrieve plan %v", user.Plan))
 	}
-	g, _ := errgroup.WithContext(context.Background())
 	if (user.EmailCounter + int64(len(to))) < plan.MaxEmails {
 		for _, rec := range to {
-			g.Go(func() error {
-				rec := rec
-				a, err := s.SaveEmailAction(user, plan, subject, body, rec, ex)
-				actions = append(actions, a)
-				if err != nil {
-					return err
-				}
-				user.EmailCounter++
-				return err
-			})
+			rec := rec
+			a, err := s.EmailRepository.SaveEmailAction(user, plan, subject, body, rec, ex)
+			actions = append(actions, a)
+			if err != nil {
+				return nil, err
+			}
+			user.EmailCounter++
+			s.UserRepository.Update(user)
 		}
 	}
-	if err := g.Wait(); err != nil {
-		panic(errors.Wrap(err, "failed to save email action"))
-	}
-
 	return actions, err
 }

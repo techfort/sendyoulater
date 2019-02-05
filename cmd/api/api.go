@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/labstack/echo"
@@ -17,15 +19,31 @@ type Context struct {
 	Redis *redis.Client
 }
 
+const (
+	// ErrMessage std error
+	ErrMessage = `{"message":"unable to process request"}`
+)
+
+// BadRequest returns a byte array for a json blob error response
+func BadRequest() []byte {
+	return []byte(ErrMessage)
+}
+
 // Store returns the repo factory
 func (c Context) Store() sendyoulater.Store {
 	return sendyoulater.NewStore(c.Redis)
 }
 
+// Err returns a standard error response
+func (c Context) Err() error {
+	return c.JSONBlob(http.StatusInternalServerError, BadRequest())
+}
+
 // RoutesGET returns get routes
 func RoutesGET() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
-		"/user/:id": UserByID,
+		"/user/:id":   UserByID,
+		"/plan/:name": PlanByName,
 	}
 }
 
@@ -72,17 +90,47 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 // SaveEmailAction sets the timer for an action
 func SaveEmailAction(c echo.Context) error {
 	cc := c.(*Context)
-	action := new(sendyoulater.EmailAction)
-	if err := cc.Bind(action); err != nil {
-		return err
+	store := cc.Store()
+	ur, pr, er := store.NewUserRepo(), store.NewPlanRepo(), store.NewEmailActionRepo()
+	var m echo.Map
+	err := cc.Bind(&m)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("Error: %v", err.Error()))
+		return cc.Err()
 	}
-	fmt.Println(fmt.Sprintf("%+v", action))
-	return nil
+	euc := store.NewEmailUseCase(ur, pr, er)
+	userID := m["userId"].(string)
+	subject := m["subject"].(string)
+	body := m["body"].(string)
+	toStr := m["to"].(string)
+	to := strings.Split(toStr, ",")
+	ex, err := time.ParseDuration(m["ex"].(string))
+	fmt.Println("Saving email aciton...")
+	if err != nil {
+		fmt.Println(fmt.Sprintf("Error: %v", err.Error()))
+		return cc.Err()
+	}
+	ea, err := euc.SaveEmailActions(userID, subject, body, to, ex)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("Error: %v", err.Error()))
+		return cc.Err()
+	}
+	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"status": "ok", "message": "%v actions saved" }`, len(ea))))
 }
 
 // UpdateUser updates user information
 func UpdateUser(c echo.Context) error {
-	return nil
+	cc := c.(*Context)
+	var user sendyoulater.User
+	if err := cc.Bind(user); err != nil {
+		return cc.JSONBlob(http.StatusInternalServerError, []byte(`{"message": "failed to retrieve data"}`))
+	}
+	ur := cc.Store().NewUserRepo()
+	_, err := ur.Update(user)
+	if err != nil {
+		return cc.Err()
+	}
+	return cc.JSONBlob(http.StatusOK, []byte(`{"status":"ok", "message": "user updated correctly"`))
 }
 
 // SaveUser is the handler for saving user info
@@ -92,7 +140,6 @@ func SaveUser(c echo.Context) error {
 	if err := cc.Bind(&m); err != nil {
 		return err
 	}
-	// TODO: continue here...
 	ur := cc.Store().NewUserRepo()
 	user, err := ur.Save(m["userId"].(string), m["firstname"].(string), m["lastname"].(string), m["plan"].(string), m["company"].(string))
 	if err != nil {
@@ -119,4 +166,17 @@ func UserByID(c echo.Context) error {
 		return cc.JSONBlob(http.StatusInternalServerError, []byte(`{"message": "could not find user"}`))
 	}
 	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"message":"ok", "user":"%+v"}`, user.UserID)))
+}
+
+// PlanByName retrieves a plan by name
+func PlanByName(c echo.Context) error {
+	name := c.Param("name")
+	cc := c.(*Context)
+	pr := cc.Store().NewPlanRepo()
+	p, err := pr.ByName(name)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("ERR: %v", err.Error()))
+		return cc.Err()
+	}
+	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"message": "ok", "plan": "%+v"`, p)))
 }
