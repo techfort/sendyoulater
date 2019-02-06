@@ -10,8 +10,12 @@ type store struct {
 type Store interface {
 	NewUserRepo() UserRepo
 	NewPlanRepo() PlanRepo
+
 	NewEmailActionRepo() EmailActionRepo
 	NewEmailUseCase(u UserRepo, p PlanRepo, e EmailActionRepo) EmailUseCase
+
+	NewSMSActionRepo() SMSActionRepo
+	NewSMSUseCase() SMSUseCase
 }
 
 // NewStore returns a Store interface to obtain repos

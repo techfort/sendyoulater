@@ -39,7 +39,10 @@ func NewEmailHandler(r *redis.Client) Handler {
 // Handle handles the actual sms event
 func (sms SMSHandler) Handle(key string) error {
 	fmt.Println(fmt.Sprintf("Handling SMS %+v", key))
-	return nil
+	_, actionKey := ParseShadowKey(key)
+	smsMap, err := sms.HGetAll(actionKey).Result()
+	fmt.Println(fmt.Sprintf("SMS: %+v", smsMap))
+	return err
 }
 
 // Handle handles the actual email event

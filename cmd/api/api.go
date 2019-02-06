@@ -127,6 +127,11 @@ func SaveEmailAction(c echo.Context) error {
 	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"status": "ok", "message": "%v actions saved" }`, len(ea))))
 }
 
+func SaveSMSAction(c echo.Context) error {
+	// r, pr, sr := store.NewUserRepo(), store.NewPlanRepo(), store.NewSMSRepo()
+	return nil
+}
+
 // UpdateUser updates user information
 func UpdateUser(c echo.Context) error {
 	cc := c.(*Context)
