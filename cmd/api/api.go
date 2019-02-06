@@ -54,6 +54,7 @@ func RoutesPOST() map[string]echo.HandlerFunc {
 		"/remove":             Remove,
 		"/user/save":          SaveUser,
 		"user/:userId/update": UpdateUser,
+		"init":                initData,
 	}
 }
 
@@ -85,6 +86,14 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 		e.POST(route, handler)
 	}
 	return e
+}
+
+func initData(c echo.Context) error {
+	cc := c.(*Context)
+	pr, ur := cc.Store().NewPlanRepo(), cc.Store().NewUserRepo()
+	pr.SavePlan("basic", 100, 100)
+	ur.Save("joe", "joe", "minichino", "basic", "sendyoulater")
+	return cc.JSONBlob(http.StatusOK, []byte(`{"message":"ok"}`))
 }
 
 // SaveEmailAction sets the timer for an action

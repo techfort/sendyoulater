@@ -3,17 +3,17 @@ package sendyoulater
 import (
 	"fmt"
 
-	"github.com/techfort/forward"
+	"github.com/go-redis/redis"
 )
 
 // Handler interface
 type Handler interface {
-	Handle() error
+	Handle(key string) error
 }
 
 // EventHandler is the base type
 type EventHandler struct {
-	Event forward.RedisKV
+	store
 }
 
 // SMSHandler handlers sms
@@ -27,23 +27,26 @@ type EmailHandler struct {
 }
 
 // NewSMSHandler returns a SMSHandler
-func NewSMSHandler(e forward.RedisKV) Handler {
-	return SMSHandler{EventHandler{e}}
+func NewSMSHandler(r *redis.Client) Handler {
+	return SMSHandler{EventHandler{store{r}}}
 }
 
 // NewEmailHandler returns an Email Handler
-func NewEmailHandler(e forward.RedisKV) Handler {
-	return EmailHandler{EventHandler{e}}
+func NewEmailHandler(r *redis.Client) Handler {
+	return EmailHandler{EventHandler{store{r}}}
 }
 
 // Handle handles the actual sms event
-func (sms SMSHandler) Handle() error {
-	fmt.Println(fmt.Sprintf("Handling SMS %+v", sms.Event))
+func (sms SMSHandler) Handle(key string) error {
+	fmt.Println(fmt.Sprintf("Handling SMS %+v", key))
 	return nil
 }
 
 // Handle handles the actual email event
-func (email EmailHandler) Handle() error {
-	fmt.Println(fmt.Sprintf("Handling Email: %+v", email.Event))
-	return nil
+func (email EmailHandler) Handle(key string) error {
+	fmt.Println(fmt.Sprintf("Handling Email: %+v", key))
+	_, actionKey := ParseShadowKey(key)
+	emailMap, err := email.HGetAll(actionKey).Result()
+	fmt.Println(fmt.Sprintf("Email: %+v", emailMap))
+	return err
 }

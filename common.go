@@ -1,6 +1,9 @@
 package sendyoulater
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// TimeFormat for datetime formatting
@@ -39,4 +42,10 @@ func KeysEmailAction(userID string, counter int64) (string, string) {
 // KeySMSAction returns shadow and key for sms action
 func KeySMSAction(userID string, counter int64) (string, string) {
 	return fmt.Sprintf(SMSActionKEY, userID, counter), fmt.Sprintf(ShadowSMSActionKEY, userID, counter)
+}
+
+// ParseShadowKey returns the type of action given a certain shadow key
+func ParseShadowKey(shadowKey string) (string, string) {
+	chunks := strings.Split(shadowKey, ":")
+	return chunks[3], strings.Replace(shadowKey, Shadow, "", 1)
 }
