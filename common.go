@@ -6,6 +6,10 @@ import (
 )
 
 const (
+	// SMS literal
+	SMS = "sms"
+	// Email literal
+	Email = "email"
 	// TimeFormat for datetime formatting
 	TimeFormat = "2006-01-02"
 	// Shadow unformatted key

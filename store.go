@@ -15,7 +15,7 @@ type Store interface {
 	NewEmailUseCase(u UserRepo, p PlanRepo, e EmailActionRepo) EmailUseCase
 
 	NewSMSActionRepo() SMSActionRepo
-	NewSMSUseCase() SMSUseCase
+	NewSMSUseCase(u UserRepo, p PlanRepo, s SMSActionRepo) SMSUseCase
 }
 
 // NewStore returns a Store interface to obtain repos
