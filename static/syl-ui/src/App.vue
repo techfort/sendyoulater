@@ -1,0 +1,29 @@
+<template>
+  <div id="app">
+    <LandingPage />
+  </div>
+</template>
+
+<script>
+
+import LandingPage from './components/LandingPage.vue'
+
+export default {
+  name: 'app',
+  components: {
+    LandingPage, 
+  }
+}
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css?family=Oswald');
+#app {
+  font-family: 'Oswald', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  margin-top: 60px;
+}
+</style>

@@ -1,10 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/urlshortener/v1"
 
 	"github.com/go-redis/redis"
 	"github.com/labstack/echo"
@@ -44,6 +52,9 @@ func RoutesGET() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
 		"/user/:id":   UserByID,
 		"/plan/:name": PlanByName,
+		"login":       Login,
+		"auth":        Auth,
+		"token":       Token,
 	}
 }
 
@@ -62,7 +73,7 @@ func RoutesPOST() map[string]echo.HandlerFunc {
 func InitAPI(r *redis.Client) (*echo.Echo, error) {
 	e := echo.New()
 	e = Config(e, r)
-	err := e.Start(":1666")
+	err := e.Start(":1323")
 	return e, errors.Wrap(err, "failed to start API")
 }
 
@@ -79,6 +90,9 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 			return h(cc)
 		}
 	})
+	e.File("/", "/static/syl-ui/public/index.html")
+	e.Use(middleware.Static("/static/syl-ui/public"))
+
 	for route, handler := range RoutesGET() {
 		e.GET(route, handler)
 	}
@@ -86,6 +100,85 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 		e.POST(route, handler)
 	}
 	return e
+}
+
+func Ui(c echo.Context) error {
+	return nil
+}
+
+func Login(c echo.Context) error {
+	url := fmt.Sprintf("%v", conf.AuthCodeURL("state", oauth2.AccessTypeOffline))
+	return c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+var (
+	gmailClient *http.Client
+	conf        = &oauth2.Config{
+		ClientID:     "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
+		ClientSecret: "5jbcSzmUBPjFKww6BsoEKpC8",
+		Endpoint:     google.Endpoint,
+		Scopes: []string{
+			urlshortener.UrlshortenerScope,
+			gmail.GmailSendScope,
+			"https://www.googleapis.com/auth/plus.me",
+		},
+		RedirectURL: "http://localhost:1323/auth",
+	}
+)
+
+func Auth(c echo.Context) error {
+
+	// Use the authorization code that is pushed to the redirect
+	// URL. Exchange will do the handshake to retrieve the
+	// initial access token. The HTTP Client returned by
+	// conf.Client will refresh the token as necessary.
+	ctx := context.Background()
+	fmt.Println(fmt.Sprintf("%+v", c.QueryParams()))
+	var p string
+	p = c.QueryParam("code")
+	var code string
+	code = p
+	_, err := fmt.Scan(&code)
+	if err != nil {
+		fmt.Println("code scan failed")
+	} else {
+		fmt.Printf("%+v", code)
+	}
+
+	tok, err := conf.Exchange(ctx, p)
+	if err != nil {
+		log.Fatalf("Unable to retrieve token from web: %v", err)
+	}
+	client := conf.Client(ctx, tok)
+
+	request, _ := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+	request.Header.Set("Bearer",
+		"ya29.GluzBhHLhGGwcTUfmLvU0VyzfIdgLseObhQLrxeWS0wHmgHRsfJ9uMHALPsslE6JoY4vt13AUVXvH6IJCs7jqxH-7hVBTTFvF-y8mg4TThZ58bV-5BF1qEkrfExj",
+	)
+	res, err := client.Do(request)
+	if err != nil {
+		fmt.Printf("err: %+v", err)
+	}
+
+	b, err := ioutil.ReadAll(res.Body)
+
+	fmt.Printf("RES: %+v", string(b))
+	srv, err := gmail.New(client)
+	f, err := srv.Users.GetProfile("sendyoulater@gmail.com").Do()
+	response := map[string]interface{}{
+		"token":   tok,
+		"profile": f,
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+func Token(c echo.Context) error {
+	tok := c.QueryParam("token")
+	return c.JSON(http.StatusOK, tok)
+}
+
+func Service() error {
+	return nil
 }
 
 func initData(c echo.Context) error {
@@ -128,7 +221,10 @@ func SaveEmailAction(c echo.Context) error {
 }
 
 func SaveSMSAction(c echo.Context) error {
-	// r, pr, sr := store.NewUserRepo(), store.NewPlanRepo(), store.NewSMSRepo()
+	// cc := c.(*Context)
+	// store := cc.Store()
+	// ur, pr, sr := store.NewUserRepo(), store.NewPlanRepo(), store.NewSMSRepo()
+	// suc := store.
 	return nil
 }
 
