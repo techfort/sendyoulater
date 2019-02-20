@@ -5,12 +5,9 @@
             Logged in as {{ USER.U3 }}
         </div>
         <div v-else>
-            <g-signin-button
-                :params="googleSignInParams"
-                @success="onSignInSuccess"
-                @error="onSignInError">
+            <button class="google-signin-button" @click="signIn">
                 Sign in with Google
-            </g-signin-button>
+            </button>
         </div>
     </div>
 </template>
@@ -21,6 +18,7 @@ import GSignInButton from 'vue-google-signin-button'
 Vue.use(GSignInButton)
 
 import { mapGetters } from 'vuex';
+import { post } from 'axios';
 
 export default {
     name: 'LandingPage',
@@ -42,26 +40,58 @@ export default {
                 client_id: "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
                 client_secret: "5jbcSzmUBPjFKww6BsoEKpC8",
                 project_id: "spry-surf-230621",
+                scope: 'profile',
             }
         }
     },
     methods: {
-        onSignInSuccess (googleUser) {
-            // `googleUser` is the GoogleUser object that represents the just-signed-in user.
-            // See https://developers.google.com/identity/sign-in/web/reference#users
-            const profile = googleUser.getBasicProfile()
-            this.$store.dispatch('setUser', profile);
+        
+        async signIn() {
+            gapi.load('auth2', async () => {
+                console.log("gapi auth2", gapi.auth2)
+                let auth2 = await gapi.auth2.init({
+                    client_id: "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
+                    client_secret: "5jbcSzmUBPjFKww6BsoEKpC8",
+                    project_id: "spry-surf-230621",
+                    scope: 'profile',
+                });
+                auth2.grantOfflineAccess().then(this.signInCallback);
+            });
         },
-        onSignInError (error) {
-            // `error` contains any error occurred.
-            console.log('OH NOES', error)
-        }
+        signInCallback(authResult) {
+            if (authResult['code']) {
+                const { code } = authResult;
+                console.log("CODE", code)
+                // Hide the sign-in button now that the user is authorized, for example:
+                $('.google-signin-button').attr('style', 'display: none');
+
+                // Send the code to the server
+                this.$http({
+                    method: 'POST',
+                    url: 'http://localhost:1323/token',
+                    // Always include an `X-Requested-With` header in every AJAX request,
+                    // to protect against CSRF attacks.
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    },
+                    success: function(result) {
+                        console.log(result)    // Handle or verify the server response.
+                    },
+                    data: { code }
+                });
+                
+            } else {
+                // There was an error.
+                console.log("There was an error")
+            }
+        },
     },
 }
 </script>
 
 <style>
-.g-signin-button {
+.google-signin-button {
   /* This is where you control how the button looks. Be creative! */
   display: inline-block;
   padding: 4px 8px;
