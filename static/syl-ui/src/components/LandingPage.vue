@@ -2,7 +2,7 @@
     <div id="landingpage">
         <h1>SendYouLater</h1>
         <div v-if="USER">
-            Logged in as {{ USER.U3 }}
+            Logged in as {{ USER.Name }}
         </div>
         <div v-else>
             <button class="google-signin-button" @click="signIn">
@@ -37,10 +37,9 @@ export default {
          * @type {Object} 
          */
             googleSignInParams: {
-                client_id: "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
+                client_id: "541640626027-uls0c5go44hag7oe1b4n78f6heqlqad4.apps.googleusercontent.com",
                 client_secret: "5jbcSzmUBPjFKww6BsoEKpC8",
-                project_id: "spry-surf-230621",
-                scope: 'profile',
+                scope: 'profile email openid',
             }
         }
     },
@@ -49,12 +48,7 @@ export default {
         async signIn() {
             gapi.load('auth2', async () => {
                 console.log("gapi auth2", gapi.auth2)
-                let auth2 = await gapi.auth2.init({
-                    client_id: "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
-                    client_secret: "5jbcSzmUBPjFKww6BsoEKpC8",
-                    project_id: "spry-surf-230621",
-                    scope: 'profile',
-                });
+                let auth2 = await gapi.auth2.init(this.googleSignInParams);
                 auth2.grantOfflineAccess().then(this.signInCallback);
             });
         },

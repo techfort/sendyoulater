@@ -2,22 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/urlshortener/v1"
-
 	"github.com/go-redis/redis"
+	"github.com/ipfans/echo-session"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/pkg/errors"
 	"github.com/techfort/sendyoulater"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/urlshortener/v1"
 )
 
 // Context is the dis Context for API requests
@@ -51,8 +53,9 @@ func RoutesGET() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
 		"/user/:id":   UserByID,
 		"/plan/:name": PlanByName,
-		"auth":        Auth,
 		"login":       Login,
+		"token":       Token,
+		"auth":        Auth,
 	}
 }
 
@@ -61,7 +64,6 @@ func RoutesPOST() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
 		"/action/email/save":  SaveEmailAction,
 		"/remove":             Remove,
-		"token":               Token,
 		"/user/save":          SaveUser,
 		"user/:userId/update": UpdateUser,
 		"init":                initData,
@@ -89,7 +91,12 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 			return h(cc)
 		}
 	})
-	e.Use(middleware.Static("/static/syl-ui/public"))
+	store, err := session.NewRedisStore(20, "tcp", "localhost:6379", "")
+	if err != nil {
+		panic(errors.Wrap(err, "Could not connect to redis and create session store"))
+	}
+	e.Use(session.Sessions("GSESSION", store))
+	e.File("/", "../../static/signin/index.html")
 
 	for route, handler := range RoutesGET() {
 		e.GET(route, handler)
@@ -100,10 +107,7 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 	return e
 }
 
-func Ui(c echo.Context) error {
-	return nil
-}
-
+// Login handler
 func Login(c echo.Context) error {
 	url := fmt.Sprintf("%v", conf.AuthCodeURL("state", oauth2.AccessTypeOffline))
 	return c.Redirect(http.StatusTemporaryRedirect, url)
@@ -112,53 +116,91 @@ func Login(c echo.Context) error {
 var (
 	gmailClient *http.Client
 	conf        = &oauth2.Config{
-		ClientID:     "541640626027-l7s3mcv05cbdhqsq0vf54tcvpprb6s63.apps.googleusercontent.com",
-		ClientSecret: "5jbcSzmUBPjFKww6BsoEKpC8",
+		ClientID:     "541640626027-75fep8r1ptdd377l73qhb2f03pckc0po.apps.googleusercontent.com",
+		ClientSecret: "7Qbre2sDMxnPHZwa_6DASz4j",
 		Endpoint:     google.Endpoint,
 		Scopes: []string{
 			urlshortener.UrlshortenerScope,
 			gmail.GmailSendScope,
-			"https://www.googleapis.com/auth/plus.me",
+			"openid",
+			"profile",
+			"email",
 		},
-		RedirectURL: "http://localhost:1323/auth",
+		RedirectURL: "http://localhost:1323/token",
 	}
 )
 
+// Token is the callback from google
 func Token(c echo.Context) error {
-
-	// Use the authorization code that is pushed to the redirect
-	// URL. Exchange will do the handshake to retrieve the
-	// initial access token. The HTTP Client returned by
-	// conf.Client will refresh the token as necessary.
 	ctx := context.Background()
+	code := c.QueryParam("code")
+	fmt.Printf("CODE: %v", code)
+	tok, err := conf.Exchange(ctx, code)
+	if err != nil {
+		log.Fatalf("Unable to retrieve token from web: %v", err)
+	}
+	fmt.Println("Token", fmt.Sprintf("%+v", tok))
+	client := conf.Client(oauth2.NoContext, tok)
+	url := "https://www.googleapis.com/oauth2/v3/userinfo"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	emailres, err := client.Do(req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"token": tok,
+			"error": err,
+		})
+	}
+	body, err := ioutil.ReadAll(emailres.Body)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	type UserInfo struct {
+		Sub       string `json:"sub"`
+		Name      string `json:"name"`
+		GivenName string `json:"given_name"`
+		LastName  string `json:"family_name"`
+		Email     string `json:"email"`
+	}
+	var userInfo UserInfo
+	err = json.Unmarshal(body, &userInfo)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	t := time.Now()
+	sess := session.Default(c)
+	sess.Set("email", userInfo.Email)
+	sess.Set("sub", userInfo.Sub)
+	sess.Set("lastactive", t.Unix())
+	sess.Set("name", userInfo.Name)
+	sess.Set("tok", tok.AccessToken)
+	sess.Set("refr", tok.RefreshToken)
+	sess.Set("exp", tok.Expiry)
+	sess.Save()
+	fmt.Println(tok, userInfo)
+	html := `<!DOCTYPE html>
+		<html>
+		<body>
+		<script>
+			window.opener.postMessage({ loginSuccessful: true, email: "%v" }, "http://localhost:1323");
+			window.close();
+		</script>
+		</body>
+		</html>`
+	return c.HTML(http.StatusOK, fmt.Sprintf(html, userInfo.Email))
+}
 
+// Auth is unused for now
+func Auth(c echo.Context) error {
 	var m echo.Map
 	err := c.Bind(&m)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
-	fmt.Println(m)
-	fmt.Printf("CODE: %v", m["code"].(string))
-	/*
-		var p string
-		p = c.QueryParam("code")
-	*/
-	p := m["code"].(string)
-	tok, err := conf.Exchange(ctx, p)
-	if err != nil {
-		log.Fatalf("Unable to retrieve token from web: %v", err)
-	}
-	fmt.Println("Token", fmt.Sprintf("%+v", tok))
-	return c.JSON(http.StatusOK, tok)
-}
-
-func Auth(c echo.Context) error {
-	tok := c.QueryParam("token")
-	return c.JSON(http.StatusOK, tok)
-}
-
-func Service() error {
-	return nil
+	return c.JSON(http.StatusOK, m)
 }
 
 func initData(c echo.Context) error {
@@ -200,6 +242,7 @@ func SaveEmailAction(c echo.Context) error {
 	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"status": "ok", "message": "%v actions saved" }`, len(ea))))
 }
 
+// SaveSMSAction is the handler for saving sms actions
 func SaveSMSAction(c echo.Context) error {
 	// cc := c.(*Context)
 	// store := cc.Store()

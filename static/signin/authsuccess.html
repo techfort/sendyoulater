@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+Authorisation successful.
+<script>
+   window.opener.postMessage({
+       auth: "success"
+   });
+   window.close();
+</script>
+
+</body>
+</html>

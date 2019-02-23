@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+        <script src="https://apis.google.com/js/client:platform.js?onload=start" async defer></script>
+        <script src="https://apis.google.com/js/api:client.js"></script>
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    </head>
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=Titillium+Web:300');
+        html, body {
+            font-size: 24px;
+            font-family:  'Titillium Web', 'Jura', 'Oswald',Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-align: center;
+            color: #2c3e50;
+            margin-top: 60px;
+        }
+        .tagline {
+            font-size: 0.9em;
+        }
+        #footer {
+            font-size: 0.8em;
+        }
+        
+        #signinButton {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            background-color: #3c82f7;
+            color: #fff;
+            box-shadow: 0 3px 0 #0f69ff;
+        }
+    </style>
+    <body>
+        <section id="header">
+            <h1>Send You Later</h1>
+            <p class="tagline">Write now, and have it sent when you want.</p>
+        </section>
+        <section id="body">
+            <button id="signinButton">Sign in with Google</button>
+        </section>
+        <section id="footer">
+            <a href="hello@sendyoulater.com">contact</a>
+        </section>
+        <script>
+            $("#signinButton").click(() => {
+                console.log("clicked sign in")
+                window.open("/login", "Login", "toolbar=no, width=640, height=800")
+            });
+            
+            window.addEventListener("message", ev => {
+                if (ev.data.loginSuccessful) {
+                    console.log(ev.data.userData)
+                    $("#signinButton").css("display", "none");
+                    $("#body").append("Signed in as " + ev.data.email);
+                    window.location.href = "http://localhost:8080";
+                } else {
+                    console.log(ev.error);
+                }
+            });
+        </script>
+    </body>
+</html>
