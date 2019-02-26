@@ -10,8 +10,10 @@
 </template>
 
 <script>
-import { get } from 'axios';
+import services from './services/';
 import Header from './components/Header.vue';
+
+const { session } = services('http://localhost:1323');
 
 export default {
   name: 'app',
@@ -19,7 +21,10 @@ export default {
     Header,
   },
   mounted() {
-    get()
+    setInterval(async () => {
+      const res = await session.check();
+      console.log(res);
+    }, 5000);
   },
 }
 </script>
@@ -37,6 +42,7 @@ html, body {
   height: 100vh;
   width: 100vw;
 }
+
 #app {
   display: grid;
   grid-template-columns: repeat(12, 1fr);

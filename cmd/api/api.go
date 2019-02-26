@@ -56,6 +56,7 @@ func RoutesGET() map[string]echo.HandlerFunc {
 		"login":       Login,
 		"token":       Token,
 		"auth":        Auth,
+		"check":       CheckSession,
 	}
 }
 
@@ -91,12 +92,17 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 			return h(cc)
 		}
 	})
-	store, err := session.NewRedisStore(20, "tcp", "localhost:6379", "")
+	session.NewCookieStore()
+
+	store, err := session.NewRedisStore(20, "tcp", "localhost:6379", "", []byte("secret"))
 	if err != nil {
 		panic(errors.Wrap(err, "Could not connect to redis and create session store"))
 	}
 	e.Use(session.Sessions("GSESSION", store))
 	e.File("/", "../../static/signin/index.html")
+	e.Static("/ui", "../../static/syl-ui/dist")
+	e.Static("/css", "../../static/syl-ui/dist/css")
+	e.Static("/js", "../../static/syl-ui/dist/js")
 
 	for route, handler := range RoutesGET() {
 		e.GET(route, handler)
@@ -170,17 +176,12 @@ func Token(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
-	t := time.Now()
-	sess := session.Default(c)
-	sess.Set("email", userInfo.Email)
-	sess.Set("sub", userInfo.Sub)
-	sess.Set("lastactive", t.Unix())
-	sess.Set("name", userInfo.Name)
-	sess.Set("tok", tok.AccessToken)
-	sess.Set("refr", tok.RefreshToken)
-	sess.Set("exp", tok.Expiry)
-	sess.Save()
+	c.SetCookie(&http.Cookie{
+		Name:  "SessionID",
+		Value: userInfo.Email,
+	})
 	fmt.Println(tok, userInfo)
+
 	html := `<!DOCTYPE html>
 		<html>
 		<body>
@@ -209,6 +210,19 @@ func initData(c echo.Context) error {
 	pr.SavePlan("basic", 100, 100)
 	ur.Save("joe", "joe", "minichino", "basic", "sendyoulater")
 	return cc.JSONBlob(http.StatusOK, []byte(`{"message":"ok"}`))
+}
+
+// CheckSession checks if the session is alive
+func CheckSession(c echo.Context) error {
+	cc := c.(*Context)
+	cookie, _ := cc.Cookie("SessionID")
+	fmt.Println(cookie.Value)
+	res := map[string]interface{}{
+		"status":  "ok",
+		"message": fmt.Sprintf("Logged in as %v", cookie.Value),
+	}
+
+	return c.JSON(http.StatusOK, res)
 }
 
 // SaveEmailAction sets the timer for an action
