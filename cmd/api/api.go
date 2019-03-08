@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -43,14 +46,29 @@ func (c Context) Store() sendyoulater.Store {
 	return sendyoulater.NewStore(c.Redis)
 }
 
+// SessionID generates an id
+func (c Context) SessionID() string {
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return ""
+	}
+	return fmt.Sprintf(`syl_sess:%v`, base64.URLEncoding.EncodeToString(b))
+}
+
 // Err returns a standard error response
 func (c Context) Err() error {
 	return c.JSONBlob(http.StatusInternalServerError, BadRequest())
 }
 
+// SessionStore instantiates a session store
+func (c Context) SessionStore() sendyoulater.SessionStore {
+	return sendyoulater.NewSessionStore(c.Redis)
+}
+
 // RoutesGET returns get routes
 func RoutesGET() map[string]echo.HandlerFunc {
 	return map[string]echo.HandlerFunc{
+		"user":        UserData,
 		"/user/:id":   UserByID,
 		"/plan/:name": PlanByName,
 		"login":       Login,
@@ -139,6 +157,7 @@ var (
 // Token is the callback from google
 func Token(c echo.Context) error {
 	ctx := context.Background()
+	cc := c.(*Context)
 	code := c.QueryParam("code")
 	fmt.Printf("CODE: %v", code)
 	tok, err := conf.Exchange(ctx, code)
@@ -172,14 +191,33 @@ func Token(c echo.Context) error {
 		Email     string `json:"email"`
 	}
 	var userInfo UserInfo
-	err = json.Unmarshal(body, &userInfo)
+	if err := json.Unmarshal(body, &userInfo); err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	ur := cc.Store().NewUserRepo()
+	var (
+		user sendyoulater.User
+	)
+	user, err = ur.ByID(userInfo.Email)
+	if user.UserID == "" {
+		user, err = ur.Save(userInfo.Email, userInfo.GivenName, userInfo.LastName, "basic", "", tok.AccessToken, tok.RefreshToken)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, err)
+		}
+	}
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+	sessionID := cc.SessionID()
 	c.SetCookie(&http.Cookie{
 		Name:  "SessionID",
-		Value: userInfo.Email,
+		Value: sessionID,
 	})
+	err = cc.SessionStore().Set(sessionID, user.UserID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 	fmt.Println(tok, userInfo)
 
 	html := `<!DOCTYPE html>
@@ -192,6 +230,26 @@ func Token(c echo.Context) error {
 		</body>
 		</html>`
 	return c.HTML(http.StatusOK, fmt.Sprintf(html, userInfo.Email))
+}
+
+// UserData returns the user data for the logged in user
+func UserData(c echo.Context) error {
+	cc := c.(*Context)
+	cookie, err := cc.Cookie("SessionID")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errors.Wrap(err, "failed to retrieve cookie"))
+	}
+	sessionID := cookie.Value
+	userID, err := cc.SessionStore().Get(sessionID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errors.Wrap(err, "failed to retrieve session"))
+	}
+	ur := cc.Store().NewUserRepo()
+	user, err := ur.ByID(userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errors.Wrap(err, "failed to find user"))
+	}
+	return c.JSON(http.StatusOK, user)
 }
 
 // Auth is unused for now
@@ -208,7 +266,7 @@ func initData(c echo.Context) error {
 	cc := c.(*Context)
 	pr, ur := cc.Store().NewPlanRepo(), cc.Store().NewUserRepo()
 	pr.SavePlan("basic", 100, 100)
-	ur.Save("joe", "joe", "minichino", "basic", "sendyoulater")
+	ur.Save("joe", "joe", "minichino", "basic", "sendyoulater", "tok", "refresh")
 	return cc.JSONBlob(http.StatusOK, []byte(`{"message":"ok"}`))
 }
 
@@ -288,7 +346,7 @@ func SaveUser(c echo.Context) error {
 		return err
 	}
 	ur := cc.Store().NewUserRepo()
-	user, err := ur.Save(m["userId"].(string), m["firstname"].(string), m["lastname"].(string), m["plan"].(string), m["company"].(string))
+	user, err := ur.Save(m["userId"].(string), m["firstname"].(string), m["lastname"].(string), m["plan"].(string), m["company"].(string), "", "")
 	if err != nil {
 		fmt.Println(err.Error())
 		return err

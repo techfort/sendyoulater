@@ -18,6 +18,8 @@ type User struct {
 	SMSCounter   int64
 	EmailCounter int64
 	PeriodStart  time.Time
+	Token        string
+	RefreshToken string
 }
 
 type userRepo struct {
@@ -27,7 +29,7 @@ type userRepo struct {
 // UserRepo wraps the User related methods of store
 type UserRepo interface {
 	ByID(userID string) (User, error)
-	Save(userID, firstname, lastname, plan, company string) (User, error)
+	Save(userID, firstname, lastname, plan, company, token, refresh string) (User, error)
 	Update(user User) (User, error)
 }
 
@@ -69,10 +71,12 @@ func (u userRepo) ByID(userID string) (User, error) {
 	user.PeriodStart = start
 	user.EmailCounter = emailc
 	user.SMSCounter = smsc
+	user.Token = ret["Token"]
+	user.RefreshToken = ret["RefreshToken"]
 	return user, err
 }
 
-func (u userRepo) Save(userID, firstname, lastname, plan, company string) (User, error) {
+func (u userRepo) Save(userID, firstname, lastname, plan, company, token, refresh string) (User, error) {
 	userMap := map[string]interface{}{
 		"UserID":       userID,
 		"FirstName":    firstname,
@@ -82,6 +86,8 @@ func (u userRepo) Save(userID, firstname, lastname, plan, company string) (User,
 		"EmailCounter": 0,
 		"SMSCounter":   0,
 		"PeriodStart":  time.Now().Format(TimeFormat),
+		"Token":        token,
+		"RefreshToken": refresh,
 	}
 	if _, err := u.HMSet(KeyUser(userID), userMap).Result(); err != nil {
 		return User{}, errors.Wrap(err, fmt.Sprintf("failed to save user: %+v", userMap))
@@ -96,6 +102,8 @@ func (u userRepo) Update(user User) (User, error) {
 		"Company":      user.Company,
 		"EmailCounter": user.EmailCounter,
 		"SMSCounter":   user.SMSCounter,
+		"Token":        user.Token,
+		"RefreshToken": user.RefreshToken,
 	}).Result(); err != nil {
 		return User{}, errors.Wrap(err, fmt.Sprintf("failed to update user: %+v", user))
 	}

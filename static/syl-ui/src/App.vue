@@ -20,11 +20,17 @@ export default {
   components: {
     Header,
   },
-  mounted() {
+  methods: {
+    getUserData: () => session.getUserData(),
+  },
+  async mounted() {
+    const { data, error } = await this.getUserData();
+    console.log(data);
+    await this.$store.dispatch('setUser', data);
     setInterval(async () => {
       const res = await session.check();
       console.log(res);
-    }, 5000);
+    }, 20000);
   },
 }
 </script>
