@@ -40,7 +40,7 @@ const mutations = {
 
 const actions = {
   setUser({ commit }, user) {
-    console.log(`Settings user ${user}`)
+    console.log(`Setting user`, user)
     return commit(m.SET_USER, user);
   },
   resetUser({ commit }) {

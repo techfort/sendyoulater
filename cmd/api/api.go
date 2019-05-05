@@ -34,6 +34,8 @@ type Context struct {
 const (
 	// ErrMessage std error
 	ErrMessage = `{"message":"unable to process request"}`
+	// CookieName is the name of the cookie
+	CookieName = "SessionID"
 )
 
 // BadRequest returns a byte array for a json blob error response
@@ -75,6 +77,7 @@ func RoutesGET() map[string]echo.HandlerFunc {
 		"token":       Token,
 		"auth":        Auth,
 		"check":       CheckSession,
+		"loadData":    LoadData,
 	}
 }
 
@@ -86,6 +89,7 @@ func RoutesPOST() map[string]echo.HandlerFunc {
 		"/user/save":          SaveUser,
 		"user/:userId/update": UpdateUser,
 		"init":                initData,
+		"loginfromfe":         LoginFromFE,
 	}
 }
 
@@ -135,6 +139,26 @@ func Config(e *echo.Echo, r *redis.Client) *echo.Echo {
 func Login(c echo.Context) error {
 	url := fmt.Sprintf("%v", conf.AuthCodeURL("state", oauth2.AccessTypeOffline))
 	return c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// LoginFromFE handles the session creation from the frontend
+func LoginFromFE(c echo.Context) error {
+	cc := c.(*Context)
+	var m echo.Map
+	if err := c.Bind(&m); err != nil {
+		return c.JSONBlob(http.StatusInternalServerError, []byte(fmt.Sprintf(`{ "message": "fail", "error": "%v" }`, err.Error())))
+	}
+
+	sessionID := cc.SessionID()
+	cookie := new(http.Cookie)
+	cookie.Name = CookieName
+	cookie.Value = sessionID
+	cookie.Expires = time.Now().Add(time.Duration(60) * time.Minute)
+	cc.SetCookie(cookie)
+
+	fmt.Println(fmt.Sprintf("SessionID: %v", cookie.Value))
+	cc.SessionStore().Set(sessionID, m["Email"].(string))
+	return cc.JSON(http.StatusOK, m)
 }
 
 var (
@@ -211,8 +235,9 @@ func Token(c echo.Context) error {
 	}
 	sessionID := cc.SessionID()
 	c.SetCookie(&http.Cookie{
-		Name:  "SessionID",
-		Value: sessionID,
+		Name:   CookieName,
+		Value:  sessionID,
+		Secure: true,
 	})
 	err = cc.SessionStore().Set(sessionID, user.UserID)
 	if err != nil {
@@ -235,8 +260,9 @@ func Token(c echo.Context) error {
 // UserData returns the user data for the logged in user
 func UserData(c echo.Context) error {
 	cc := c.(*Context)
-	cookie, err := cc.Cookie("SessionID")
+	cookie, err := cc.Cookie(CookieName)
 	if err != nil {
+		fmt.Println(fmt.Sprintf("Error in UserData: %v", err))
 		return c.JSON(http.StatusInternalServerError, errors.Wrap(err, "failed to retrieve cookie"))
 	}
 	sessionID := cookie.Value
@@ -273,14 +299,35 @@ func initData(c echo.Context) error {
 // CheckSession checks if the session is alive
 func CheckSession(c echo.Context) error {
 	cc := c.(*Context)
-	cookie, _ := cc.Cookie("SessionID")
-	fmt.Println(cookie.Value)
+	cookie, err := cc.Cookie("SessionID")
+	if err != nil {
+		fmt.Println(err.Error())
+		return cc.JSON(http.StatusInternalServerError, err)
+	}
 	res := map[string]interface{}{
 		"status":  "ok",
 		"message": fmt.Sprintf("Logged in as %v", cookie.Value),
 	}
 
 	return c.JSON(http.StatusOK, res)
+}
+
+// LoadData returns all actions for user
+func LoadData(c echo.Context) error {
+	cc := c.(*Context)
+	store := cc.Store()
+	ur, er := store.NewUserRepo(), store.NewEmailActionRepo()
+	userID := cc.QueryParam("user")
+	if userID == "" {
+		return cc.JSON(http.StatusInternalServerError, errors.New("Missing userId parameter"))
+	}
+	user, err := ur.ByID(userID)
+	if err != nil {
+		return cc.JSON(http.StatusInternalServerError, errors.New("cannot retrieve user"))
+	}
+
+	eas, err := er.EmailsOfUser(user)
+	return cc.JSON(http.StatusOK, eas)
 }
 
 // SaveEmailAction sets the timer for an action

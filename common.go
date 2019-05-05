@@ -3,6 +3,7 @@ package sendyoulater
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
@@ -26,6 +27,10 @@ const (
 	SMSActionKEY = `u:%v:sms:%v`
 	// ShadowSMSActionKEY key
 	ShadowSMSActionKEY = Shadow + SMSActionKEY
+	// EmailActionsForUserKEY key
+	EmailActionsForUserKEY = `eafu:%v`
+	// SMSActionsForUserKEY key
+	SMSActionsForUserKEY = `safu:%v`
 )
 
 // KeyPlan returns the formatted plan key
@@ -38,14 +43,32 @@ func KeyUser(userID string) string {
 	return fmt.Sprintf(UserKEY, userID)
 }
 
+// DateID returns an id composed of the date and the counter since a counter is monthly valid
+func DateID(counter int64) string {
+	year, month, day := time.Now().Date()
+	return fmt.Sprintf("%v-%v-%v-%v", year, month, day, counter)
+}
+
 // KeysEmailAction returns key and shadow key for email actions
 func KeysEmailAction(userID string, counter int64) (string, string) {
-	return fmt.Sprintf(EmailActionKEY, userID, counter), fmt.Sprintf(ShadowEmailActionKEY, userID, counter)
+	dateID := DateID(counter)
+	return fmt.Sprintf(EmailActionKEY, userID, dateID), fmt.Sprintf(ShadowEmailActionKEY, userID, dateID)
+}
+
+// KeyEmailActionsForUser returns the formatted key
+func KeyEmailActionsForUser(userID string) string {
+	return fmt.Sprintf(EmailActionsForUserKEY, userID)
+}
+
+// KeySMSActionsForUser returns the formatted key
+func KeySMSActionsForUser(userID string) string {
+	return fmt.Sprintf(SMSActionsForUserKEY, userID)
 }
 
 // KeySMSAction returns shadow and key for sms action
 func KeySMSAction(userID string, counter int64) (string, string) {
-	return fmt.Sprintf(SMSActionKEY, userID, counter), fmt.Sprintf(ShadowSMSActionKEY, userID, counter)
+	dateID := DateID(counter)
+	return fmt.Sprintf(SMSActionKEY, userID, dateID), fmt.Sprintf(ShadowSMSActionKEY, userID, dateID)
 }
 
 // ParseShadowKey returns the type of action given a certain shadow key

@@ -21,6 +21,8 @@ type emailRepo struct {
 // EmailActionRepo interface for saving/updating email actions
 type EmailActionRepo interface {
 	SaveEmailAction(user User, plan Plan, subject, body, to string, ex time.Duration) (EmailAction, error)
+	ByID(actionKey string) (EmailAction, error)
+	EmailsOfUser(user User) ([]EmailAction, error)
 }
 
 func (s store) NewEmailActionRepo() EmailActionRepo {
@@ -36,7 +38,16 @@ func (s store) NewEmailUseCase(u UserRepo, p PlanRepo, e EmailActionRepo) EmailU
 	return emailUseCase{s, u, p, e}
 }
 
-func (s store) SaveEmailAction(user User, plan Plan, subject, body, to string, ex time.Duration) (EmailAction, error) {
+func (s emailRepo) ByID(actionKey string) (EmailAction, error) {
+	result, err := s.HGetAll(actionKey).Result()
+	if err != nil {
+		return EmailAction{}, errors.Wrap(err, "cannot retrieve emailaction")
+	}
+	ea := EmailAction{}
+	return ea.FromMap(result)
+}
+
+func (s emailRepo) SaveEmailAction(user User, plan Plan, subject, body, to string, ex time.Duration) (EmailAction, error) {
 	actionKey, shadowKey := KeysEmailAction(user.UserID, user.EmailCounter)
 	if _, err := s.Set(shadowKey, "email", ex).Result(); err != nil {
 		return EmailAction{}, errors.Wrap(err, "error setting shadow key, email action not saved")
@@ -48,7 +59,30 @@ func (s store) SaveEmailAction(user User, plan Plan, subject, body, to string, e
 		"Subject":   subject,
 		"Body":      body,
 	}).Result()
+	if err != nil {
+		return EmailAction{}, errors.Wrap(err, "cannot create email action")
+	}
+	if _, err := s.SAdd(KeyEmailActionsForUser(user.UserID), actionKey).Result(); err != nil {
+		return EmailAction{}, errors.Wrap(err, "cannot add email to result set")
+	}
 	return EmailAction{Action: Action{UserID: user.UserID, Timestamp: time.Now(), Delay: ex}, To: to, Subject: subject, Body: body}, err
+}
+
+// EmailsOfUser returns all the email actions for a user
+func (s emailRepo) EmailsOfUser(user User) ([]EmailAction, error) {
+	ids, err := s.SMembers(KeyEmailActionsForUser(user.UserID)).Result()
+	if err != nil {
+		return []EmailAction{}, errors.Wrap(err, "cannot retrieve emails of user")
+	}
+	emails := make([]EmailAction, len(ids))
+	for i, id := range ids {
+		ea, err := s.ByID(id)
+		if err != nil {
+			return emails, errors.Wrap(err, fmt.Sprintf("cannot retrieve email with id: %v", id))
+		}
+		emails[i] = ea
+	}
+	return emails, err
 }
 
 func (s emailUseCase) SaveEmailActions(userID, subject, body string, to []string, ex time.Duration) ([]EmailAction, error) {

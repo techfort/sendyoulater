@@ -4,7 +4,7 @@
       <Header />
     </div>
     <div class="menu">MENU</div>
-    <div class="main">MAIN</div>
+    <div class="main"><router-view @signin="login"></router-view></div>
     <div class="footer">FOOTER</div>
   </div>
 </template>
@@ -12,7 +12,8 @@
 <script>
 import services from './services/';
 import Header from './components/Header.vue';
-
+import to from './helpers';
+import { mapGetters } from 'vuex';
 const { session } = services('http://localhost:1323');
 
 export default {
@@ -21,16 +22,29 @@ export default {
     Header,
   },
   methods: {
-    getUserData: () => session.getUserData(),
+    async getUserData () { return to(session.getUserData()); },
+    async login (profile) {
+      console.log('Reacting to signin', profile);
+      const { data, error } = await session.login(profile);
+      console.log('Result of user data', data);
+      this.loadData();
+    },
+    async loadData() {
+      const { error, data } = await session.loadData();
+      if (error) {
+        console.log(error);
+        return;
+      }
+      console.log('DATA', data);
+    },
+    ...mapGetters([
+      'USER',
+    ]),
   },
   async mounted() {
-    const { data, error } = await this.getUserData();
-    console.log(data);
-    await this.$store.dispatch('setUser', data);
-    setInterval(async () => {
-      const res = await session.check();
-      console.log(res);
-    }, 20000);
+    
+  },
+  async created() {
   },
 }
 </script>
