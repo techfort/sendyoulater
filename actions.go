@@ -1,7 +1,6 @@
 package sendyoulater
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -9,6 +8,7 @@ import (
 
 // Action base type
 type Action struct {
+	ID        string
 	UserID    string
 	Timestamp time.Time
 	Delay     time.Duration
@@ -24,7 +24,7 @@ type EmailAction struct {
 
 // FromMap inflates an EmailAction from a redis result
 func (a *EmailAction) FromMap(result map[string]string) (EmailAction, error) {
-	delay, err := strconv.ParseInt(result["Delay"], 10, 64)
+	delay, err := time.ParseDuration(result["Delay"])
 	if err != nil {
 		return *a, errors.Wrap(err, "cannot convert Delay value to integer")
 	}
@@ -32,7 +32,7 @@ func (a *EmailAction) FromMap(result map[string]string) (EmailAction, error) {
 	if err != nil {
 		return *a, errors.Wrap(err, "cannot convert timestamp")
 	}
-	a.Action = Action{UserID: result["UserID"], Delay: time.Duration(delay) * time.Second, Timestamp: timestamp}
+	a.Action = Action{ID: result["ID"], UserID: result["UserID"], Delay: time.Duration(delay) * time.Second, Timestamp: timestamp}
 	a.To = result["To"]
 	a.Body = result["Body"]
 	a.Subject = result["Subject"]

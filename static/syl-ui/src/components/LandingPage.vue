@@ -1,14 +1,44 @@
 <template>
-    <div id="landingpage">
-        <h1>SendYouLater</h1>
-        <div v-if="USER">
-            Logged in as {{ USER.Name }}
+    <div id="mainview">
+        <div class="menu">
+            <div>Upcoming actions: {{ EMAILS.length }}</div>
+            <div class="syl-action" v-for="e in EMAILS" v-bind:key="e.ID">
+                    {{ e.To }}
+            </div>
+
         </div>
-        <div v-else>
-            <div id="gSignIn"></div>
+        <div class="main">
+            <div v-if="USER">
+                Click on any action to view details.
+            </div>
+            <div v-else>
+                <div id="gSignIn"></div>
+            </div>
         </div>
     </div>
 </template>
+
+<style>
+
+#mainview {
+  grid-column: span 12;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-gap:10px;
+}
+.menu {
+  background: #ccc;
+  grid-column: span 4;
+}
+.main {
+  background: #eee;
+  grid-column: span 8;
+}
+.syl-action {
+    font-size: 0.9em;
+}
+</style>
+
 
 <script>
 // import Vue from 'vue'
@@ -23,8 +53,13 @@ export default {
     computed: {
         ...mapGetters([
             'USER',
-            'EVENTS',
-        ])
+            'EMAILS',
+        ]),
+    },
+    watch: {
+        EMAILS(n, o) {
+            console.log(n, o);
+        },
     },
     async mounted() {
         const that = this;
@@ -44,7 +79,7 @@ export default {
             console.log('emitting signin event');
             that.$emit('signin', profile);
         };
-
+        console.log('EMAILS', this.$store.getters.EMAILS);
         const onFailure = (err) => {
             console.error(err);
         };

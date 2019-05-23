@@ -3,15 +3,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/go-redis/redis"
+	"github.com/techfort/sendyoulater"
 )
 
 func main() {
-	r := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	_, err := InitAPI(r)
-
+	v := sendyoulater.Env()
+	_, err := InitAPI(v)
 	if err != nil {
 		panic(err)
 	}

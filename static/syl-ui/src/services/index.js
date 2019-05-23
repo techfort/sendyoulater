@@ -8,7 +8,8 @@ export default (baseUrl) => {
     login: async (email) => to(post(`${baseUrl}/loginfromfe`, 
       email 
     )),
-    loadData: async () => to(get(`${baseUrl}/loadData`)),
+    loadData: async (user) => to(get(`${baseUrl}/loadData?user=${user}`)),
+    saveEmailAction: async (data) => to(post(`${baseUrl}/action/email/save`, data)),
   }
   return {
     session,

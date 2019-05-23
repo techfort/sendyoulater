@@ -1,6 +1,9 @@
 <template>
     <div id="header">
-        <div v-if="USER">SendYouLater | Hello {{ USER.Name }}</div>
+        <div v-if="USER">SendYouLater | Hello {{ USER.Name }}
+            <router-link to="/">browse</router-link>
+            <router-link to="create">create action</router-link>
+        </div>
         <div v-else>SendYouLater</div>
     </div>
 </template>

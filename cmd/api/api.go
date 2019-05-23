@@ -18,11 +18,9 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"github.com/techfort/sendyoulater"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/urlshortener/v1"
 )
 
 // Context is the dis Context for API requests
@@ -78,6 +76,7 @@ func RoutesGET() map[string]echo.HandlerFunc {
 		"auth":        Auth,
 		"check":       CheckSession,
 		"loadData":    LoadData,
+		"init":        initData,
 	}
 }
 
@@ -88,16 +87,19 @@ func RoutesPOST() map[string]echo.HandlerFunc {
 		"/remove":             Remove,
 		"/user/save":          SaveUser,
 		"user/:userId/update": UpdateUser,
-		"init":                initData,
 		"loginfromfe":         LoginFromFE,
 	}
 }
 
 // InitAPI starts the API
-func InitAPI(r *redis.Client) (*echo.Echo, error) {
+func InitAPI(v *viper.Viper) (*echo.Echo, error) {
 	e := echo.New()
+	fmt.Println("ENV", v.GetString("api_port"), v.GetString("redis_url"))
+	r := redis.NewClient(&redis.Options{
+		Addr: v.GetString("redis_url"), //"localhost:6379",
+	})
 	e = Config(e, r)
-	err := e.Start(":1323")
+	err := e.Start(":" + v.GetString("api_port")) //":1323"
 	return e, errors.Wrap(err, "failed to start API")
 }
 
@@ -163,19 +165,8 @@ func LoginFromFE(c echo.Context) error {
 
 var (
 	gmailClient *http.Client
-	conf        = &oauth2.Config{
-		ClientID:     "541640626027-75fep8r1ptdd377l73qhb2f03pckc0po.apps.googleusercontent.com",
-		ClientSecret: "7Qbre2sDMxnPHZwa_6DASz4j",
-		Endpoint:     google.Endpoint,
-		Scopes: []string{
-			urlshortener.UrlshortenerScope,
-			gmail.GmailSendScope,
-			"openid",
-			"profile",
-			"email",
-		},
-		RedirectURL: "http://localhost:1323/token",
-	}
+	v           = sendyoulater.Env()
+	conf        = sendyoulater.Oauth2Config(v)
 )
 
 // Token is the callback from google
@@ -226,6 +217,13 @@ func Token(c echo.Context) error {
 	user, err = ur.ByID(userInfo.Email)
 	if user.UserID == "" {
 		user, err = ur.Save(userInfo.Email, userInfo.GivenName, userInfo.LastName, "basic", "", tok.AccessToken, tok.RefreshToken)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, err)
+		}
+	} else {
+		user.RefreshToken = tok.RefreshToken
+		user.Token = tok.AccessToken
+		user, err = ur.Update(user)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, err)
 		}
@@ -290,9 +288,8 @@ func Auth(c echo.Context) error {
 
 func initData(c echo.Context) error {
 	cc := c.(*Context)
-	pr, ur := cc.Store().NewPlanRepo(), cc.Store().NewUserRepo()
+	pr := cc.Store().NewPlanRepo()
 	pr.SavePlan("basic", 100, 100)
-	ur.Save("joe", "joe", "minichino", "basic", "sendyoulater", "tok", "refresh")
 	return cc.JSONBlob(http.StatusOK, []byte(`{"message":"ok"}`))
 }
 
@@ -327,6 +324,9 @@ func LoadData(c echo.Context) error {
 	}
 
 	eas, err := er.EmailsOfUser(user)
+	if err != nil {
+		return cc.Err()
+	}
 	return cc.JSON(http.StatusOK, eas)
 }
 
@@ -350,12 +350,12 @@ func SaveEmailAction(c echo.Context) error {
 	ex, err := time.ParseDuration(m["ex"].(string))
 	fmt.Println("Saving email aciton...")
 	if err != nil {
-		fmt.Println(fmt.Sprintf("Error: %v", err.Error()))
+		fmt.Println(fmt.Sprintf("Error converting duration: %v", err.Error()))
 		return cc.Err()
 	}
 	ea, err := euc.SaveEmailActions(userID, subject, body, to, ex)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("Error: %v", err.Error()))
+		fmt.Println(fmt.Sprintf("Error saving email action: %v", err.Error()))
 		return cc.Err()
 	}
 	return cc.JSONBlob(http.StatusOK, []byte(fmt.Sprintf(`{"status": "ok", "message": "%v actions saved" }`, len(ea))))

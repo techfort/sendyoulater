@@ -53,11 +53,13 @@ func (s emailRepo) SaveEmailAction(user User, plan Plan, subject, body, to strin
 		return EmailAction{}, errors.Wrap(err, "error setting shadow key, email action not saved")
 	}
 	_, err := s.HMSet(actionKey, map[string]interface{}{
+		"ID":        actionKey,
 		"UserID":    user.UserID,
 		"Timestamp": time.Now().Format(TimeFormat),
 		"To":        to,
 		"Subject":   subject,
 		"Body":      body,
+		"Delay":     fmt.Sprintf("%v", ex),
 	}).Result()
 	if err != nil {
 		return EmailAction{}, errors.Wrap(err, "cannot create email action")
@@ -65,7 +67,7 @@ func (s emailRepo) SaveEmailAction(user User, plan Plan, subject, body, to strin
 	if _, err := s.SAdd(KeyEmailActionsForUser(user.UserID), actionKey).Result(); err != nil {
 		return EmailAction{}, errors.Wrap(err, "cannot add email to result set")
 	}
-	return EmailAction{Action: Action{UserID: user.UserID, Timestamp: time.Now(), Delay: ex}, To: to, Subject: subject, Body: body}, err
+	return EmailAction{Action: Action{ID: actionKey, UserID: user.UserID, Timestamp: time.Now(), Delay: ex}, To: to, Subject: subject, Body: body}, err
 }
 
 // EmailsOfUser returns all the email actions for a user
@@ -75,10 +77,11 @@ func (s emailRepo) EmailsOfUser(user User) ([]EmailAction, error) {
 		return []EmailAction{}, errors.Wrap(err, "cannot retrieve emails of user")
 	}
 	emails := make([]EmailAction, len(ids))
-	for i, id := range ids {
-		ea, err := s.ByID(id)
+	fmt.Println("emails ids", ids)
+	for i, x := range ids {
+		ea, err := s.ByID(x)
 		if err != nil {
-			return emails, errors.Wrap(err, fmt.Sprintf("cannot retrieve email with id: %v", id))
+			return emails, errors.Wrap(err, fmt.Sprintf("cannot retrieve email with id: %v", x))
 		}
 		emails[i] = ea
 	}

@@ -3,8 +3,7 @@
     <div class="header">
       <Header />
     </div>
-    <div class="menu">MENU</div>
-    <div class="main"><router-view @signin="login"></router-view></div>
+    <router-view @signin="login" @emailcreated="loadData"></router-view>
     <div class="footer">FOOTER</div>
   </div>
 </template>
@@ -12,9 +11,11 @@
 <script>
 import services from './services/';
 import Header from './components/Header.vue';
-import to from './helpers';
 import { mapGetters } from 'vuex';
-const { session } = services('http://localhost:1323');
+import to from './helpers';
+import Settings from './config';
+const { APIUrl } = Settings;
+const { session } = services(APIUrl);
 
 export default {
   name: 'app',
@@ -30,12 +31,13 @@ export default {
       this.loadData();
     },
     async loadData() {
-      const { error, data } = await session.loadData();
+      const { error, data } = await session.loadData(this.$store.getters.USER.Email);
       if (error) {
         console.log(error);
         return;
       }
-      console.log('DATA', data);
+      console.log('received emails', data.data);
+      await this.$store.dispatch('setEmails', data.data);
     },
     ...mapGetters([
       'USER',
@@ -77,14 +79,7 @@ html, body {
   background: #ddd;
   grid-column: span 12;
 }
-.menu {
-  background: #ccc;
-  grid-column: span 4;
-}
-.main {
-  background: #eee;
-  grid-column: span 8;
-}
+
 .footer {
   background: #ddd;
   grid-column: span 12;

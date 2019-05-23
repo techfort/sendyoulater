@@ -11,17 +11,20 @@ import (
 )
 
 func main() {
+	v := sendyoulater.Env()
 	ps := forward.NewPubSub(forward.PubSubConfig{
-		Addr:       "localhost:6379",
+		Addr:       v.GetString("redis_url"),
 		KeyspaceID: 0,
 		Pattern:    "*",
 	})
 
 	r := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: v.GetString("redis_url"),
 	})
 
-	smsHandler, emailHandler := sendyoulater.NewSMSHandler(r), sendyoulater.NewEmailHandler(r)
+	fmt.Println("CLIENT_ID", v.GetString("oauth_clientid"))
+
+	smsHandler, emailHandler := sendyoulater.NewSMSHandler(r, v), sendyoulater.NewEmailHandler(r, v)
 
 	events, errs := ps.Channel()
 	for e := range events {
