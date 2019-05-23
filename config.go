@@ -3,6 +3,9 @@ package sendyoulater
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
+	"github.com/stripe/stripe-go"
+
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -22,7 +25,7 @@ func Env() *viper.Viper {
 	if err != nil {
 		fmt.Println("ERROR setting env var", err.Error())
 	}
-	v.BindEnv("oath_redirect_url")
+	v.BindEnv("oauth_redirect_url")
 	return v
 }
 
@@ -41,4 +44,14 @@ func Oauth2Config(v *viper.Viper) *oauth2.Config {
 		},
 		RedirectURL: v.GetString("oauth_redirect_url"), //"http://localhost:1323/token",
 	}
+}
+
+// SetUpStripe sets the env var to the stripe key
+func SetUpStripe(v *viper.Viper) error {
+	stripeKey := v.GetString("stripe_secret_key")
+	if stripeKey == "" {
+		return errors.New("No secret key found for stripe")
+	}
+	stripe.Key = stripeKey
+	return nil
 }
