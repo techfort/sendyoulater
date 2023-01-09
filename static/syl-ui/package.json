@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "axios": "^0.18.0",
-    "luxon": "^1.15.0",
+    "luxon": "^2.5.2",
     "vue": "^2.5.22",
     "vue-cookies": "^1.5.13",
     "vue-datetime": "^1.0.0-beta.10",
